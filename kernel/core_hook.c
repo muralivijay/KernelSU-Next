@@ -547,6 +547,8 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 				pr_info("susfs: copy_to_user() failed\n");
 			return 0;
 		}
+
+#if 0
                 if (arg2 == CMD_SUSFS_SET_ANDROID_DATA_ROOT_PATH) {
                         int error = 0;
                         if (!ksu_access_ok((void __user*)arg3, SUSFS_MAX_LEN_PATHNAME)) {
@@ -579,6 +581,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
                                 pr_info("susfs: copy_to_user() failed\n");
                         return 0;
                 }
+#endif
 #endif //#ifdef CONFIG_KSU_SUSFS_SUS_PATH
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 		if (arg2 == CMD_SUSFS_ADD_SUS_MOUNT) {
