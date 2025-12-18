@@ -260,8 +260,10 @@ out:
 
 	if (persist) {
 		persistent_allow_list();
+#ifndef CONFIG_KSU_SUSFS
 		// FIXME: use a new flag
 		ksu_mark_running_process();
+#endif // #ifndef CONFIG_KSU_SUSFS 
 	}
 
 	return result;
