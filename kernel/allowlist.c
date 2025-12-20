@@ -267,7 +267,7 @@ out:
 
 	if (persist) {
 		persistent_allow_list();
-#ifdef KSU_KPROBES_HOOK
+#if defined(KSU_KPROBES_HOOK) || !defined(CONFIG_KSU_SUSFS)
 		// FIXME: use a new flag
 		ksu_mark_running_process();
 #endif

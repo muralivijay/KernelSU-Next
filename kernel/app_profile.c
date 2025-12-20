@@ -300,7 +300,7 @@ void escape_with_root_profile(void)
 
 	setup_selinux(profile->selinux_domain);
 
-#ifdef KSU_KPROBES_HOOK
+#if defined(KSU_KPROBES_HOOK) || !defined(CONFIG_KSU_SUSFS)
 	struct task_struct *p = current;
 	struct task_struct *t;
 	for_each_thread (p, t) {

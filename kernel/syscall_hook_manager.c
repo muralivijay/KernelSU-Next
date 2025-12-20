@@ -1,4 +1,4 @@
-#ifdef KSU_KPROBES_HOOK
+#if defined(KSU_KPROBES_HOOK) || !defined(CONFIG_KSU_SUSFS)
 #include "linux/compiler.h"
 #include "linux/cred.h"
 #include "linux/printk.h"
@@ -373,7 +373,8 @@ void ksu_syscall_hook_manager_exit(void)
 	ksu_setuid_hook_exit();
 	ksu_avc_spoof_exit();
 }
-#else
+#else // #if defined(KSU_KPROBES_HOOK) || !defined(CONFIG_KSU_SUSFS)
+
 #include "klog.h" // IWYU pragma: keep
 #include "syscall_hook_manager.h"
 #include "sucompat.h"

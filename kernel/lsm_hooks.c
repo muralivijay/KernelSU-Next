@@ -30,6 +30,7 @@ static int ksu_key_permission(key_ref_t key_ref, const struct cred *cred,
 }
 #endif
 
+#if defined(CONFIG_KSU_MANUAL_HOOK) && !defined(CONFIG_KSU_SUSFS)
 static int ksu_task_fix_setuid(struct cred *new, const struct cred *old,
 			       int flags)
 {
@@ -84,17 +85,20 @@ int ksu_bprm_check(struct linux_binprm *bprm)
 	return 0;
 
 }
+#endif
 
 static struct security_hook_list ksu_hooks[] = {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) ||                           \
 	defined(CONFIG_IS_HW_HISI)
 	LSM_HOOK_INIT(key_permission, ksu_key_permission),
 #endif
+#if defined(CONFIG_KSU_MANUAL_HOOK) && !defined(CONFIG_KSU_SUSFS)
 	LSM_HOOK_INIT(inode_permission, ksu_inode_permission),
 #ifndef KSU_KPROBES_HOOK
 	LSM_HOOK_INIT(bprm_check_security, ksu_bprm_check),
 #endif
 	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid)
+#endif // #if defined(CONFIG_KSU_MANUAL_HOOK) && !defined(CONFIG_KSU_SUSFS)
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0)
