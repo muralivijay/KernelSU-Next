@@ -4,6 +4,10 @@
 #include <linux/module.h>
 #include <linux/workqueue.h>
 
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>
+#endif // #ifdef CONFIG_KSU_SUSFS
+
 #include "allowlist.h"
 #include "feature.h"
 #include "klog.h" // IWYU pragma: keep
@@ -16,6 +20,7 @@
 struct cred* ksu_cred;
 
 extern void __init ksu_lsm_hook_init(void);
+#ifndef CONFIG_KSU_SUSFS
 extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 					void *argv, void *envp, int *flags);
 extern int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
@@ -27,6 +32,7 @@ int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
 	return ksu_handle_execveat_sucompat(fd, filename_ptr, argv, envp,
 					    flags);
 }
+#endif
 
 int __init kernelsu_init(void)
 {
@@ -56,6 +62,10 @@ int __init kernelsu_init(void)
 	ksu_allowlist_init();
 
 	ksu_throne_tracker_init();
+
+#ifdef CONFIG_KSU_SUSFS
+    susfs_init();
+#endif // #ifdef CONFIG_KSU_SUSFS
 
 	ksu_ksud_init();
 
