@@ -46,6 +46,12 @@
 #include "kernel_umount.h"
 
 #ifdef CONFIG_KSU_SUSFS
+static inline bool is_some_system_uid(uid_t uid)
+{
+    uid %= 100000;
+    return (uid >= 1000 && uid < 10000);
+}
+
 static inline bool is_zygote_isolated_service_uid(uid_t uid)
 {
     uid %= 100000;
@@ -58,11 +64,14 @@ static inline bool is_zygote_normal_app_uid(uid_t uid)
     return (uid >= 10000 && uid < 19999);
 }
 
+bool susfs_is_umount_for_zygote_system_process_enabled = false;
+
 extern u32 susfs_zygote_sid;
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 extern void susfs_run_sus_path_loop(uid_t uid);
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+extern bool susfs_is_umount_for_zygote_iso_service_enabled;
 extern void susfs_reorder_mnt_id(void);
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
@@ -203,6 +212,8 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
     return 0;
 }
 #else
+extern bool ksu_kernel_umount_enabled;
+extern bool ksu_module_mounted;
 int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid){
     // we rely on the fact that zygote always call setresuid(3) with same uids
     uid_t new_uid = ruid;
@@ -216,7 +227,7 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid){
             if (!is_ksu_domain()) {
                 pr_warn("find suspicious EoP: %d %s, from %d to %d\n", 
                     current->pid, current->comm, old_uid, new_uid);
-                force_sig(SIGKILL);
+                send_sigkill();
                 return 0;
             }
         }
@@ -225,7 +236,7 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid){
             if (euid < current_euid().val && !ksu_is_allow_uid_for_current(old_uid)) {
                 pr_warn("find suspicious EoP: %d %s, from %d to %d\n", 
                     current->pid, current->comm, old_uid, new_uid);
-                force_sig(SIGKILL);
+                send_sigkill();
                 return 0;
             }
         }
@@ -273,6 +284,11 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid){
         goto do_umount;
     }
 
+    // Lastly, Check if spawned process is some system process and needs to be umounted
+    if (unlikely(is_some_system_uid(new_uid) && susfs_is_umount_for_zygote_system_process_enabled)) {
+        goto do_umount;
+    }
+
     if (ksu_is_allow_uid_for_current(new_uid)) {
         if (current->seccomp.mode == SECCOMP_MODE_FILTER &&
             current->seccomp.filter) {
@@ -289,6 +305,9 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid){
     return 0;
 
 do_umount:
+    if (!ksu_kernel_umount_enabled || !ksu_module_mounted) {
+        goto skip_try_umount;
+    }
     // Handle kernel umount
 #ifndef CONFIG_KSU_SUSFS_TRY_UMOUNT
     ksu_handle_umount(old_uid, new_uid);
@@ -296,9 +315,16 @@ do_umount:
     susfs_try_umount(new_uid);
 #endif // #ifndef CONFIG_KSU_SUSFS_TRY_UMOUNT
 
+skip_try_umount:
+
+    get_task_struct(current);
+
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
     // We can reorder the mnt_id now after all sus mounts are umounted
     susfs_reorder_mnt_id();
+
+    put_task_struct(current);
+
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH

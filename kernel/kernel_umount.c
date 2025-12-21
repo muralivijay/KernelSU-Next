@@ -49,6 +49,13 @@ static const struct ksu_feature_handler kernel_umount_handler = {
 	.set_handler = kernel_umount_feature_set,
 };
 
+#if defined(CONFIG_KSU_SUSFS_TRY_UMOUNT) && defined(CONFIG_KSU_SUSFS_ENABLE_LOG)
+extern bool susfs_is_log_enabled;
+#endif // #if defined(CONFIG_KSU_SUSFS_TRY_UMOUNT) && defined(CONFIG_KSU_SUSFS_ENABLE_LOG)
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+extern void susfs_try_umount(void);
+#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) ||                           \
 	defined(KSU_HAS_PATH_UMOUNT)
 extern int path_umount(struct path *path, int flags);
@@ -84,9 +91,9 @@ static void ksu_sys_umount(const char *mnt, int flags)
 #endif
 
 #if !defined(CONFIG_KSU_SUSFS) || !defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
-static void try_umount(const char *mnt, int flags)
+static void try_umount(const char *mnt, bool check_mnt, int flags)
 #else
-void try_umount(const char *mnt, int flags)
+void try_umount(const char *mnt, bool check_mnt, int flags)
 #endif
 {
 	struct path path;
@@ -100,6 +107,13 @@ void try_umount(const char *mnt, int flags)
 		path_put(&path);
 		return;
 	}
+
+#if defined(CONFIG_KSU_SUSFS_TRY_UMOUNT) && defined(CONFIG_KSU_SUSFS_ENABLE_LOG)
+    if (susfs_is_log_enabled) {
+        pr_info("susfs: umounting '%s'\n", mnt);
+    }
+#endif // #if defined(CONFIG_KSU_SUSFS_TRY_UMOUNT) && defined(CONFIG_KSU_SUSFS_ENABLE_LOG)
+
 #ifndef KSU_HAS_PATH_UMOUNT
     ksu_umount_mnt(mnt, &path, flags);
 #else
@@ -107,11 +121,24 @@ void try_umount(const char *mnt, int flags)
 #endif
 }
 
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+void susfs_try_umount_all(void) {
+    susfs_try_umount();
+    try_umount("/odm", true, 0);
+    try_umount("/system", true, 0);
+    try_umount("/vendor", true, 0);
+    try_umount("/product", true, 0);
+    try_umount("/system_ext", true, 0);
+    try_umount("/data/adb/modules", false, MNT_DETACH);
+    try_umount("/debug_ramdisk", true, MNT_DETACH);
+}
+#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+
+#if !defined(CONFIG_KSU_SUSFS) || !defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
 struct umount_tw {
 	struct callback_head cb;
 };
 
-#if !defined(CONFIG_KSU_SUSFS) || !defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)
 static void umount_tw_func(struct callback_head *cb)
 {
 	struct umount_tw *tw = container_of(cb, struct umount_tw, cb);
@@ -121,7 +148,7 @@ static void umount_tw_func(struct callback_head *cb)
     down_read(&mount_list_lock);
     list_for_each_entry(entry, &mount_list, list) {
         pr_info("%s: unmounting: %s flags 0x%x\n", __func__, entry->umountable, entry->flags);
-        try_umount(entry->umountable, entry->flags);
+        try_umount(entry->umountable, true, entry->flags);
     }
     up_read(&mount_list_lock);
 

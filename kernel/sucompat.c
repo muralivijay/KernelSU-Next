@@ -316,12 +316,29 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
 
     char path[sizeof(su_path) + 1] = {0};
 
+    // Remove this later!! we use syscall hook, so this will never happen!!!!!
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0) && 0
+    // it becomes a `struct filename *` after 5.18
+    // https://elixir.bootlin.com/linux/v5.18/source/fs/stat.c#L216
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
+    struct filename *filename = *((struct filename **)filename_user);
+#endif
+
+    if (IS_ERR(filename)) {
+        return 0;
+    }
+    if (likely(memcmp(filename->name, su_path, sizeof(su_path))))
+        return 0;
+    pr_info("ksu_handle_stat: su->sh!\n");
+    memcpy((void *)filename->name, sh_path, sizeof(sh_path));
+#else
     strncpy_from_user_nofault(path, *filename_user, sizeof(path));
 
     if (unlikely(!memcmp(path, su_path, sizeof(su_path)))) {
         pr_info("ksu_handle_stat: su->sh!\n");
         *filename_user = sh_user_path();
     }
+#endif
 
     return 0;
 }
